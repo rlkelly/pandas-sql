@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 
+# TODO: drop_duplicates
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 import numpy as np
 import pandas as pd
 from pandas.core.frame import DataFrame
+import sqlalchemy_bigquery.base as bq
 from sqlalchemy import Column, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import select
-from sqlalchemy.dialects import sqlite
-from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects import sqlite, postgresql
 
 from sql_pandas.utils import convert_types
 
 
 class SqlDataFrame(object):
-    def __init__(self, data, table_name, dialect=postgresql):
+    def __init__(self, data, table_name, dialect=postgresql.dialect()):
         if type(data) is dict:
             self.df = pd.DataFrame(data)
         elif isinstance(data, DataFrame):
@@ -24,7 +28,12 @@ class SqlDataFrame(object):
         self.dialect = dialect
         self.statement = None
         self.table_name = table_name
+        self.columns = None
+        self.query = None
         self.init_table()
+        engine = create_engine('sqlite://', echo=True)
+        Session = sessionmaker(bind=engine)
+        self.session = Session()
 
     def init_table(self):
         class Table(declarative_base()):
@@ -39,10 +48,13 @@ class SqlDataFrame(object):
         self.Table = Table
 
     def select(self, selection):
-        if type(selection) is list:
-            self.statement = select([getattr(self, col) if type(col) == str else col for col in selection])
-        else:
-            self.statement = select([getattr(self, col) if type(col) == str else col for col in [selection]])
+        models = [s.class_ for s in selection]
+        self.columns = selection
+        self.query = self.session.query(*models)
+        # if type(selection) is list:
+        #     self.entities = select([getattr(self, col) if type(col) == str else col for col in selection])
+        # else:
+        #     self.entities = select([getattr(self, col) if type(col) == str else col for col in [selection]])
         return self
 
     def where(self, cond):
@@ -56,33 +68,23 @@ class SqlDataFrame(object):
         return self
 
     def extract_query(self):
-        query = self.statement.compile(dialect=postgresql.dialect())
+        if self.columns:
+            self.query = self.query.with_entities(*self.columns)
+            self.queried_df = self.queried_df[[col.name for col in self.columns]]
+        query = self.query.statement.compile(dialect=self.dialect)
         query_str = str(query)
         for param in query.params:
             query_str = query_str.replace(f'%({param})s', str(query.params[param]))
         return query_str
 
-    def outerjoin(self, other_table, left, right):
-        self.statement = (self.statement
-            .outerjoin(other_table.Table, left == right)
-        )
-        self.queried_df = pd.merge(
-            self.queried_df,
-            other_table.queried_df,
-            left_on=left.name,
-            right_on=right.name,
-            how='outer',
-        )
-        return self
-
     def collect(self):
+        if self.columns:
+            self.query = self.query.with_entities(*self.columns)
+            self.queried_df = self.queried_df[[col.name for col in self.columns]]
         self.df = self.queried_df
         return self
 
-    def innerjoin(self, other_table, left, right):
-        self.statement = (self.statement
-            .outerjoin(other_table.Table, left == right)
-        )
+    def _merge(self, other_table, left, right, how='outer'):
         self.queried_df = pd.merge(
             self.queried_df,
             other_table.queried_df,
@@ -90,6 +92,19 @@ class SqlDataFrame(object):
             right_on=right.name,
             how='inner',
         )
+
+    def outerjoin(self, other_table, left, right):
+        self.query = (self.query
+            .outerjoin(other_table.Table, left == right)
+        )
+        self._merge(other_table, left, right)
+        return self
+
+    def innerjoin(self, other_table, left, right):
+        self.query = (self.query
+            .join(other_table.Table, left == right)
+        )
+        self._merge(other_table, left, right, how='inner')
         return self
 
     def __getattr__(self, attr):
@@ -113,8 +128,18 @@ class Where(SqlDataFrame):
             self.cond = getattr(self.Table, self.cond)
         if type(eq) is str:
             eq = '"' + str(eq) + '"'
-        self.parent.statement = self.statement.where(
+        self.parent.query = self.parent.query.filter(
             self.cond == eq)
+        return self.parent
+
+    def ne(self, eq):
+        if type(self.cond) is str:
+            self.parent.queried_df = self.queried_df[self.queried_df[self.cond] != eq]
+            self.cond = getattr(self.Table, self.cond)
+        if type(eq) is str:
+            eq = '"' + str(eq) + '"'
+        self.parent.query = self.parent.query.filter(
+            self.cond != eq)
         return self.parent
 
     def lt(self, eq):
@@ -123,7 +148,7 @@ class Where(SqlDataFrame):
             self.cond = getattr(self.Table, self.cond)
         if type(eq) is str:
             eq = '"' + str(eq) + '"'
-        self.parent.statement = self.statement.where(
+        self.parent.query = self.parent.query.filter(
             self.cond < eq)
         return self.parent
 

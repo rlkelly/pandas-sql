@@ -1,4 +1,4 @@
-from pandas_sql.base import SqlDataFrame
+from sql_pandas.base import SqlDataFrame
 
 
 if __name__ == '__main__':
@@ -10,6 +10,7 @@ if __name__ == '__main__':
         {'house_number': range(5), 'pet': ['cat', 'dog', 'bird', None, None]},
         table_name='pets',
     )
+    print('\n\n')
 
     print(
         first_dataframe
@@ -22,8 +23,8 @@ if __name__ == '__main__':
     first_dataframe.reset()
     print(
         first_dataframe
-            .select([first_dataframe.number, second_dataframe.pet])
-            .where('owner').eq('al')
+            .select([first_dataframe.owner, second_dataframe.pet])
+            .where('owner').ne('al')
             .outerjoin(
                 second_dataframe,
                 first_dataframe.number,
