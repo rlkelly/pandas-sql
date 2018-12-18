@@ -1,4 +1,4 @@
-from sql_pandas import SqlDataFrame
+from pandas_sql.base import SqlDataFrame
 
 
 if __name__ == '__main__':

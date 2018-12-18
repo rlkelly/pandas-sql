@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import pandas as pd
 from pandas.core.frame import DataFrame
@@ -7,7 +9,7 @@ from sqlalchemy.sql import select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects import postgresql
 
-from .utils import convert_types
+from sql_pandas.utils import convert_types
 
 
 class SqlDataFrame(object):
