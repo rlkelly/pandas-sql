@@ -1,27 +1,24 @@
 import numpy as np
 import pandas as pd
 from pandas.core.frame import DataFrame
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects import postgresql
 
-
-def convert_types(type, primary_key=False, maxlen=None, unique=False):
-    if np.issubdtype(type, np.integer):
-        return Column(Integer(), primary_key=primary_key)
-    if np.issubdtype(type, np.integer):
-        return Column(Float(), primary_key=primary_key)
-    if np.issubdtype(type, np.object_):
-        return Column(String(length=maxlen), unique=unique)
+from .utils import convert_types
 
 
 class SqlDataFrame(object):
-    def __init__(self, pandas_dataframe, table_name, dialect=postgresql):
-        assert isinstance(pandas_dataframe, DataFrame)
-        self.df = pandas_dataframe
-        self.queried_df = pandas_dataframe
+    def __init__(self, data, table_name, dialect=postgresql):
+        if type(data) is dict:
+            self.df = pd.DataFrame(data)
+        elif isinstance(data, DataFrame):
+            self.df = data
+        else:
+            raise Exception('Invalid Format')
+        self.queried_df = self.df
         self.dialect = dialect
         self.statement = None
         self.table_name = table_name
@@ -137,49 +134,3 @@ class Where(SqlDataFrame):
         self.parent.statement = self.statement.where(
             self.cond > eq)
         return self.parent
-
-# examples
-if __name__ == '__main__':
-    first_dataframe = SqlDataFrame(
-        pd.DataFrame({'number': range(5), 'owner': ['al', 'beau', 'chris', 'dan', 'ed']}),
-        table_name='homes',
-    )
-    second_dataframe = SqlDataFrame(
-        pd.DataFrame({'house_number': range(5), 'pet': ['cat', 'dog', 'bird', None, None]}),
-        table_name='pets',
-    )
-
-    print(
-        first_dataframe
-            .select([first_dataframe.number, first_dataframe.owner])
-            .where(first_dataframe.number).eq(1)
-            .and_where('owner').eq('al')
-            .extract_query(),
-    )
-    print('\n\n')
-    first_dataframe.reset()
-    print(
-        first_dataframe
-            .select([first_dataframe.number, second_dataframe.pet])
-            .where('owner').eq('al')
-            .outerjoin(
-                second_dataframe,
-                first_dataframe.number,
-                second_dataframe.house_number,
-            )
-            .extract_query()
-    )
-    print('\n\n')
-    first_dataframe.reset()
-    print(
-        first_dataframe
-            .select([first_dataframe.number, second_dataframe.pet])
-            .where('owner').eq('al')
-            .innerjoin(
-                second_dataframe,
-                first_dataframe.number,
-                second_dataframe.house_number,
-            )
-            .collect()
-            .extract_query()
-    )
