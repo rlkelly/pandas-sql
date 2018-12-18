@@ -76,6 +76,10 @@ class SqlDataFrame(object):
         )
         return self
 
+    def collect(self):
+        self.df = self.queried_df
+        return self
+
     def innerjoin(self, other_table, left, right):
         self.statement = (self.statement
             .outerjoin(other_table.Table, left == right)
@@ -134,6 +138,7 @@ class Where(SqlDataFrame):
             self.cond > eq)
         return self.parent
 
+# examples
 if __name__ == '__main__':
     first_dataframe = SqlDataFrame(
         pd.DataFrame({'number': range(5), 'owner': ['al', 'beau', 'chris', 'dan', 'ed']}),
@@ -149,7 +154,6 @@ if __name__ == '__main__':
             .select([first_dataframe.number, first_dataframe.owner])
             .where(first_dataframe.number).eq(1)
             .and_where('owner').eq('al')
-            # .collect()
             .extract_query(),
     )
     print('\n\n')
@@ -163,7 +167,6 @@ if __name__ == '__main__':
                 first_dataframe.number,
                 second_dataframe.house_number,
             )
-            # .collect()
             .extract_query()
     )
     print('\n\n')
@@ -177,6 +180,6 @@ if __name__ == '__main__':
                 first_dataframe.number,
                 second_dataframe.house_number,
             )
-            # .collect()
+            .collect()
             .extract_query()
     )
