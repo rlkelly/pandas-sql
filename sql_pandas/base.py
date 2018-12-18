@@ -24,16 +24,17 @@ class SqlDataFrame(object):
             self.df = data
         else:
             raise Exception('Invalid Format')
+
         self.queried_df = self.df
         self.dialect = dialect
-        self.statement = None
         self.table_name = table_name
         self.columns = None
         self.query = None
         self.init_table()
         engine = create_engine('sqlite://', echo=True)
-        Session = sessionmaker(bind=engine)
-        self.session = Session()
+        self.Session = sessionmaker(bind=engine)
+        self.session = self.Session()
+        self.iterations = []
 
     def init_table(self):
         class Table(declarative_base()):
@@ -41,20 +42,20 @@ class SqlDataFrame(object):
             id = Column(Integer(), primary_key=True)
 
         cols = self.df.columns.values
+        self.cols = cols
         schema = dict(((col, self.queried_df[col].dtype.type) for col in cols))
         for key in schema.keys():
             value = schema[key]
             setattr(Table, key, convert_types(value))
         self.Table = Table
 
-    def select(self, selection):
-        models = [s.class_ for s in selection]
-        self.columns = selection
+    def select(self, *selection):
+        try:
+            models = [s.class_ for s in selection]
+            self.columns = selection
+        except:
+            models = selection
         self.query = self.session.query(*models)
-        # if type(selection) is list:
-        #     self.entities = select([getattr(self, col) if type(col) == str else col for col in selection])
-        # else:
-        #     self.entities = select([getattr(self, col) if type(col) == str else col for col in [selection]])
         return self
 
     def where(self, cond):
@@ -64,18 +65,10 @@ class SqlDataFrame(object):
         return self.where(cond)
 
     def reset(self):
+        self.iterations.append(self.extract_query())
         self.queried_df = self.df
+        self.session = self.Session()
         return self
-
-    def extract_query(self):
-        if self.columns:
-            self.query = self.query.with_entities(*self.columns)
-            self.queried_df = self.queried_df[[col.name for col in self.columns]]
-        query = self.query.statement.compile(dialect=self.dialect)
-        query_str = str(query)
-        for param in query.params:
-            query_str = query_str.replace(f'%({param})s', str(query.params[param]))
-        return query_str
 
     def collect(self):
         if self.columns:
@@ -107,11 +100,32 @@ class SqlDataFrame(object):
         self._merge(other_table, left, right, how='inner')
         return self
 
+    def limit(self, num):
+        self.query = self.query.limit(num)
+        return self
+
+    def dedupe(self):
+        self.query = self.query.distinct()
+        self.queried_df = self.queried_df.drop_duplicates()
+        return self
+
     def __getattr__(self, attr):
         if type(attr) is str:
             if attr not in dir(self):
                 return getattr(self.Table, attr)
         return getattr(self, attr)
+
+    def extract_query(self):
+        if self.columns:
+            self.query = self.query.with_entities(*self.columns)
+            self.queried_df = self.queried_df[[col.name for col in self.columns]]
+        else:
+            self.query = self.query.with_entities(*[getattr(self.Table, name) for name in self.cols])
+        query = self.query.statement.compile(dialect=self.dialect)
+        query_str = str(query)
+        for param in query.params:
+            query_str = query_str.replace(f'%({param})s', str(query.params[param]))
+        return query_str
 
 
 class Where(SqlDataFrame):
@@ -158,6 +172,6 @@ class Where(SqlDataFrame):
             self.cond = getattr(self.Table, self.cond)
         if type(eq) is str:
             eq = '"' + str(eq) + '"'
-        self.parent.statement = self.statement.where(
+        self.parent.query = self.parent.query.filter(
             self.cond > eq)
         return self.parent
