@@ -125,7 +125,12 @@ class SqlDataFrame(object):
         query_str = str(query)
         for param in query.params:
             query_str = query_str.replace(f'%({param})s', str(query.params[param]))
-        return query_str
+        return query_str + '\n\n'
+
+    def __getitem__(self, item):
+        if type(item) is list:
+            return self.select(*item)
+        return self.select(item)
 
 
 class Where(SqlDataFrame):
@@ -141,7 +146,7 @@ class Where(SqlDataFrame):
             self.parent.queried_df = self.queried_df[self.queried_df[self.cond] == eq]
             self.cond = getattr(self.Table, self.cond)
         if type(eq) is str:
-            eq = '"' + str(eq) + '"'
+            eq = f'"{eq}"'
         self.parent.query = self.parent.query.filter(
             self.cond == eq)
         return self.parent
