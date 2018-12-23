@@ -20,7 +20,7 @@ This attempts to allow users to code in pandas but generate SQL queries.  An exa
                 first_dataframe.number,
                 second_dataframe.house_number,
             )
-            # .collect()
+            .collect()
             .extract_query()
     )
     
