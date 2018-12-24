@@ -14,8 +14,7 @@ This attempts to allow users to code in pandas but generate SQL queries.  An exa
         table_name='pets',
     )
     print(
-        first_dataframe
-            .select([first_dataframe.number, second_dataframe.pet])
+        first_dataframe[[first_dataframe.number, second_dataframe.pet]]
             .where('owner').eq('al')
             .innerjoin(
                 second_dataframe,
