@@ -86,6 +86,20 @@ class SqlDataFrame(object):
             how='inner',
         )
 
+    def merge(self, other_table, left, right, how='outer'):
+        if how == 'outer':
+            self.query = (self.query
+                .outerjoin(other_table.Table, left == right)
+            )
+        elif how == 'inner':
+            self.query = (self.query
+                .innerjoin(other_table.Table, left == right)
+            )
+        else:
+            raise NotImplemented('Working on Full Outer Still')
+        self._merge(other_table, left, right, how=how)
+        return self
+
     def outerjoin(self, other_table, left, right):
         self.query = (self.query
             .outerjoin(other_table.Table, left == right)
