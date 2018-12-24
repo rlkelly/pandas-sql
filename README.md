@@ -1,7 +1,9 @@
 # pandas-sql
 
-This attempts to allow users to code in pandas but generate SQL queries.  An example might look like:
+This attempts to allow users to code in pandas but generate SQL queries.  To run:
+      python setup.py install
 
+An example might look like:
 
     from sql_pandas import SqlDataFrame
 
